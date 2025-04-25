@@ -4,7 +4,16 @@ mod datatype;
 mod index;
 mod upgrade;
 
+#[cfg(any(
+    feature = "pg13",
+    feature = "pg14",
+    feature = "pg15",
+    feature = "pg16",
+    feature = "pg17"
+))]
 pgrx::pg_module_magic!();
+#[cfg(any(feature = "pg18"))]
+pgrx::pg_module_magic!("vchord");
 pgrx::extension_sql_file!("./sql/bootstrap.sql", bootstrap);
 pgrx::extension_sql_file!("./sql/finalize.sql", finalize);
 
@@ -17,7 +26,7 @@ extern "C-unwind" fn _PG_init() {
     unsafe {
         #[cfg(any(feature = "pg13", feature = "pg14"))]
         pgrx::pg_sys::EmitWarningsOnPlaceholders(c"vchord".as_ptr());
-        #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17"))]
+        #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17", feature = "pg18"))]
         pgrx::pg_sys::MarkGUCPrefixReserved(c"vchord".as_ptr());
     }
 }

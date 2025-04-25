@@ -107,7 +107,7 @@ pub fn init() {
     unsafe {
         #[cfg(any(feature = "pg13", feature = "pg14"))]
         pgrx::pg_sys::EmitWarningsOnPlaceholders(c"vchordrq".as_ptr());
-        #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17"))]
+        #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17", feature = "pg18"))]
         pgrx::pg_sys::MarkGUCPrefixReserved(c"vchordrq".as_ptr());
     }
 }

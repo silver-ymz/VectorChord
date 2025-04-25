@@ -921,7 +921,13 @@ unsafe fn options(
     index_relation: pgrx::pg_sys::Relation,
 ) -> (VectorOptions, VchordrqIndexingOptions) {
     let att = unsafe { &mut *(*index_relation).rd_att };
+    #[cfg(any(feature = "pg13", feature = "pg14", feature = "pg15", feature = "pg16", feature = "pg17"))]
     let atts = unsafe { att.attrs.as_slice(att.natts as _) };
+    #[cfg(feature = "pg18")]
+    let atts: &[pgrx::pg_sys::FormData_pg_attribute] = unsafe {
+        let ptr = att.compact_attrs.as_ptr().add(att.natts as _).cast();
+        std::slice::from_raw_parts(ptr, att.natts as _)
+    };
     if atts.is_empty() {
         pgrx::error!("indexing on no columns is not supported");
     }

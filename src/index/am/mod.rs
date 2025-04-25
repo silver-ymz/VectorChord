@@ -36,6 +36,8 @@ const TABLE: &[pgrx::pg_sys::relopt_parse_elt] = &[pgrx::pg_sys::relopt_parse_el
     optname: c"options".as_ptr(),
     opttype: pgrx::pg_sys::relopt_type::RELOPT_TYPE_STRING,
     offset: std::mem::offset_of!(Reloption, options) as i32,
+    #[cfg(feature = "pg18")]
+    isset_offset: 0,
 }];
 
 static RELOPT_KIND: OnceLock<pgrx::pg_sys::relopt_kind::Type> = OnceLock::new();
@@ -76,7 +78,7 @@ const AM_HANDLER: pgrx::pg_sys::IndexAmRoutine = const {
     am_routine.amsupport = 1;
     am_routine.amcanorderbyop = true;
 
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     {
         am_routine.amcanbuildparallel = true;
     }
@@ -257,7 +259,13 @@ pub unsafe extern "C-unwind" fn aminsert(
     unsafe { aminsertinner(index_relation, values, is_null, heap_tid) }
 }
 
-#[cfg(any(feature = "pg14", feature = "pg15", feature = "pg16", feature = "pg17"))]
+#[cfg(any(
+    feature = "pg14",
+    feature = "pg15",
+    feature = "pg16",
+    feature = "pg17",
+    feature = "pg18"
+))]
 #[allow(clippy::too_many_arguments)]
 #[pgrx::pg_guard]
 pub unsafe extern "C-unwind" fn aminsert(
@@ -309,7 +317,16 @@ pub unsafe extern "C-unwind" fn ambulkdelete(
     let opfamily = unsafe { opfamily((*info).index) };
     let index = unsafe { PostgresRelation::new((*info).index) };
     let check = || unsafe {
+        #[cfg(any(
+            feature = "pg13",
+            feature = "pg14",
+            feature = "pg15",
+            feature = "pg16",
+            feature = "pg17"
+        ))]
         pgrx::pg_sys::vacuum_delay_point();
+        #[cfg(feature = "pg18")]
+        pgrx::pg_sys::vacuum_delay_point(false);
     };
     let callback = callback.expect("null function pointer");
     let callback = |pointer: NonZero<u64>| {
@@ -335,7 +352,16 @@ pub unsafe extern "C-unwind" fn amvacuumcleanup(
     let opfamily = unsafe { opfamily((*info).index) };
     let index = unsafe { PostgresRelation::new((*info).index) };
     let check = || unsafe {
+        #[cfg(any(
+            feature = "pg13",
+            feature = "pg14",
+            feature = "pg15",
+            feature = "pg16",
+            feature = "pg17"
+        ))]
         pgrx::pg_sys::vacuum_delay_point();
+        #[cfg(feature = "pg18")]
+        pgrx::pg_sys::vacuum_delay_point(false);
     };
     crate::index::algorithm::maintain(opfamily, index, check);
     stats

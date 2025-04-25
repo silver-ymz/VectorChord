@@ -29,13 +29,33 @@ unsafe extern "C-unwind" fn rewrite_plan_state(
             if Some(true) == dirty_check(index_relation) && (*node).iss_ScanDesc.is_null() {
                 use crate::index::am::Scanner;
 
-                (*node).iss_ScanDesc = pgrx::pg_sys::index_beginscan(
-                    (*node).ss.ss_currentRelation,
-                    (*node).iss_RelationDesc,
-                    (*(*node).ss.ps.state).es_snapshot,
-                    (*node).iss_NumScanKeys,
-                    (*node).iss_NumOrderByKeys,
-                );
+                #[cfg(any(
+                    feature = "pg13",
+                    feature = "pg14",
+                    feature = "pg15",
+                    feature = "pg16",
+                    feature = "pg17"
+                ))]
+                {
+                    (*node).iss_ScanDesc = pgrx::pg_sys::index_beginscan(
+                        (*node).ss.ss_currentRelation,
+                        (*node).iss_RelationDesc,
+                        (*(*node).ss.ps.state).es_snapshot,
+                        (*node).iss_NumScanKeys,
+                        (*node).iss_NumOrderByKeys,
+                    );
+                }
+                #[cfg(feature = "pg18")]
+                {
+                    (*node).iss_ScanDesc = pgrx::pg_sys::index_beginscan(
+                        (*node).ss.ss_currentRelation,
+                        (*node).iss_RelationDesc,
+                        (*(*node).ss.ps.state).es_snapshot,
+                        &raw mut (*node).iss_Instrument,
+                        (*node).iss_NumScanKeys,
+                        (*node).iss_NumOrderByKeys,
+                    );
+                }
 
                 let scanner = &mut *((*(*node).iss_ScanDesc).opaque as *mut Scanner);
                 scanner.hack = std::ptr::NonNull::new(node);
@@ -57,6 +77,13 @@ unsafe extern "C-unwind" fn rewrite_plan_state(
 
 static PREV_EXECUTOR_START: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
 
+#[cfg(any(
+    feature = "pg13",
+    feature = "pg14",
+    feature = "pg15",
+    feature = "pg16",
+    feature = "pg17"
+))]
 #[pgrx::pg_guard]
 unsafe extern "C-unwind" fn executor_start(
     query_desc: *mut pgrx::pg_sys::QueryDesc,
@@ -80,12 +107,51 @@ unsafe extern "C-unwind" fn executor_start(
     }
 }
 
+#[cfg(feature = "pg18")]
+#[pgrx::pg_guard]
+unsafe extern "C-unwind" fn executor_start(
+    query_desc: *mut pgrx::pg_sys::QueryDesc,
+    eflags: ::std::os::raw::c_int,
+) -> bool {
+    unsafe {
+        use core::mem::transmute;
+        use pgrx::pg_sys::ExecutorStart_hook_type;
+        use std::sync::atomic::Ordering;
+        let value = transmute::<*mut (), ExecutorStart_hook_type>(
+            PREV_EXECUTOR_START.load(Ordering::Relaxed),
+        );
+        if let Some(prev_executor_start) = value {
+            prev_executor_start(query_desc, eflags);
+        } else {
+            pgrx::pg_sys::standard_ExecutorStart(query_desc, eflags);
+        }
+        let planstate = (*query_desc).planstate;
+        let context = core::ptr::null_mut();
+        rewrite_plan_state(planstate, context);
+    }
+    true
+}
+
 pub fn init() {
     unsafe {
         use core::mem::transmute;
         use std::sync::atomic::Ordering;
+        #[cfg(any(
+            feature = "pg13",
+            feature = "pg14",
+            feature = "pg15",
+            feature = "pg16",
+            feature = "pg17"
+        ))]
         PREV_EXECUTOR_START.store(
             transmute::<Option<unsafe extern "C-unwind" fn(*mut _, _)>, *mut ()>(
+                pgrx::pg_sys::ExecutorStart_hook,
+            ),
+            Ordering::Relaxed,
+        );
+        #[cfg(feature = "pg18")]
+        PREV_EXECUTOR_START.store(
+            transmute::<Option<unsafe extern "C-unwind" fn(*mut _, _) -> _>, *mut ()>(
                 pgrx::pg_sys::ExecutorStart_hook,
             ),
             Ordering::Relaxed,
