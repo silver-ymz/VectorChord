@@ -8,7 +8,7 @@ use std::ffi::CStr;
 pub enum Io {
     read_buffer,
     prefetch_buffer,
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     read_stream,
 }
 
@@ -27,7 +27,7 @@ static PRERERANK_FILTERING: GucSetting<bool> = GucSetting::<bool>::new(false);
 static IO_RERANK: GucSetting<Io> = GucSetting::<Io>::new(
     #[cfg(any(feature = "pg13", feature = "pg14", feature = "pg15", feature = "pg16"))]
     Io::prefetch_buffer,
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     Io::read_stream,
 );
 
@@ -186,7 +186,7 @@ pub fn io_rerank() -> SearchIo {
     match IO_RERANK.get() {
         Io::read_buffer => SearchIo::ReadBuffer,
         Io::prefetch_buffer => SearchIo::PrefetchBuffer,
-        #[cfg(feature = "pg17")]
+        #[cfg(any(feature = "pg17", feature = "pg18"))]
         Io::read_stream => SearchIo::ReadStream,
     }
 }

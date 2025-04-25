@@ -438,7 +438,7 @@ where
 }
 
 pub struct PostgresReadStream<I: Iterator> {
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     raw: *mut pgrx::pg_sys::ReadStream,
     // Because of `Box`'s special alias rules, `Box` cannot be used here.
     cache: NonNull<Cache<I>>,
@@ -461,7 +461,7 @@ where
         panic!("read_stream is not supported on PostgreSQL versions earlier than 17.");
     }
 
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     fn next_if(
         &mut self,
         predicate: impl FnOnce(&I::Item) -> bool,
@@ -503,7 +503,7 @@ impl<I: Iterator> Drop for PostgresReadStream<I> {
     fn drop(&mut self) {
         unsafe {
             let _ = std::mem::take(self.cache.as_mut());
-            #[cfg(feature = "pg17")]
+            #[cfg(any(feature = "pg17", feature = "pg18"))]
             if !std::thread::panicking() && pgrx::pg_sys::IsTransactionState() {
                 pgrx::pg_sys::read_stream_end(self.raw);
             }
@@ -526,7 +526,7 @@ impl RelationReadStream for PostgresRelation {
         panic!("read_stream is not supported on PostgreSQL versions earlier than 17.");
     }
 
-    #[cfg(feature = "pg17")]
+    #[cfg(any(feature = "pg17", feature = "pg18"))]
     fn read_stream<I: Iterator>(&self, iter: I) -> Self::ReadStream<'_, I>
     where
         I::Item: Fetch,
